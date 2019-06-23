@@ -33,7 +33,7 @@ def four_point_transform(image, pts):
     return warped
 
 
-image = cv2.imread('examples\maxresdefault.jpg')
+image = cv2.imread('examples/005.jpg')
 gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
 
