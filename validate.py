@@ -5,6 +5,12 @@ import matplotlib.pyplot as plt
 from scipy.spatial import distance
 
 
+color_red = (0, 0, 255)
+color_green = (0, 255, 0)
+color_yellow = (0, 255, 255)
+font = cv2.FONT_HERSHEY_DUPLEX
+font_size = 0.5
+
 def get_image(image_path):
     bgr_image = cv2.imread(image_path)
     height, width, channels = bgr_image.shape
@@ -62,11 +68,11 @@ def order_points(pts):
     return rect
 
 
-def adjust_perspective(image, pts_origin, margin):
+def adjust_perspective(image, pts_origin, size, margin):
     height, width, channels = image.shape
 
     pts_destiny = np.float32(
-        [[0 + margin, 500 + margin], [0 + margin, 0 + margin], [500 + margin, 0 + margin]])
+        [[0 + margin, size + margin], [0 + margin, 0 + margin], [size + margin, 0 + margin]])
     M = cv2.getAffineTransform(pts_origin, pts_destiny)
 
     image_destiny = cv2.warpAffine(image, M, (width, height))
@@ -107,23 +113,16 @@ def check_intersection(rectangle, wingsuit, tolerance):
     return intersection
 
 
-def paint_wingsuits_keypoints(image, keypoints, radius):
-    color_red = (0, 0, 255)
-    color_green = (0, 255, 0)
-    color_yellow = (0, 255, 255)
-    font = cv2.FONT_HERSHEY_DUPLEX
-    font_size = 0.5
-    tolerance_border = .95
+def paint_wingsuits_keypoints(raw_image, keypoints, radius, square_size):
+    tolerance_border = square_size
+
+    image = raw_image.copy()
 
     height, width, channels = image.shape
-    estimated_positions, perpendicular_distance = get_estimated_positions(
+    estimated_positions, perpendicular_distance, square_side_wingsuits = get_estimated_positions(
         keypoints, height, width)
 
-    # image = cv2.drawKeypoints(image, keypoints, np.array(
-    #     []), color_red, cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
-
-    square_radius = int((perpendicular_distance / 2)*tolerance_border)
-
+    square_radius = int((perpendicular_distance / 2) * tolerance_border)
 
     grid_painted = False
     for keypoint in keypoints:
@@ -140,7 +139,7 @@ def paint_wingsuits_keypoints(image, keypoints, radius):
             X = int(X)
             Y = int(Y)
             rectange_conference = [X - square_radius, Y -
-                                square_radius, X + square_radius, Y + square_radius]
+                                   square_radius, X + square_radius, Y + square_radius]
             X0, Y0, X1, Y1 = rectange_conference
             if not grid_painted:
                 cv2.rectangle(image, (X0, Y0), (X1, Y1), color_yellow, 1)
@@ -157,10 +156,14 @@ def paint_wingsuits_keypoints(image, keypoints, radius):
             color = color_red
 
         cv2.rectangle(image, (x0, y0), (x1, y1), color, 2)
-        
+
         grid_painted = True
-            
-    return image
+
+    image_size = int(perpendicular_distance * (square_side_wingsuits + 1))
+
+    crop = image[0:image_size, 0:image_size]
+
+    return crop
 
 
 def get_points_closest_from(reference, points, K):
@@ -207,36 +210,86 @@ def get_estimated_positions(keypoints, height, width):
             column += 1
         row += 1
 
-    return estimated_positions, perpendicular_distance
+    return estimated_positions, perpendicular_distance, square_side_wingsuits
 
+def paint_coordinates(image, keypoints, color):
+    image = cv2.drawKeypoints(image, keypoints, np.array(
+        []), color_yellow, cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
+
+    max_diameter = max([k.size for k in keypoints])
+    radius = int(max_diameter / 2)
+
+    for keypoint in keypoints:
+        x, y, diameter = int(keypoint.pt[0]), int(keypoint.pt[1]), keypoint.size
+        text = f'x: {x}, y: {y}'
+        cv2.circle(image, (x, y), radius, color, 2)
+        cv2.putText(image, text, (x + radius, y - radius), font, font_size, color, 1)
+
+    return image
 
 def main():
-    image_path = sys.argv[1]
-    
+    if len(sys.argv) == 2:
+        image_path = sys.argv[1]
+        square_size = .95
+    elif len(sys.argv) == 3:
+        image_path = sys.argv[1]
+        square_size = sys.argv[2]
+    else:
+        image_path = 'examples/001.jpg'
+        square_size = .95
+
     bgr_image, height, width, channels = get_image(image_path)
     rgb_image = cv2.cvtColor(bgr_image, cv2.COLOR_BGR2RGB)
 
     keypoints = get_wingsuits_keypoints(bgr_image)
+
+    first_detection_image = paint_coordinates(bgr_image, keypoints, color_red)
+
+    first_detection_image = cv2.cvtColor(
+        first_detection_image, cv2.COLOR_BGR2RGB)
+
     diamond_left_wingsuit, diamond_right_wingsuit, diamond_top_wingsuit, diamond_bottom_wingsuit = get_diamond_wingsuits_positions(
         keypoints)
 
     pts_origin_wingsuits = np.float32(
         [diamond_left_wingsuit, diamond_top_wingsuit, diamond_right_wingsuit])
-    adjusted_image = adjust_perspective(bgr_image, pts_origin_wingsuits, 100)
+
+    side_size_image = int(distance.euclidean(
+        diamond_left_wingsuit, diamond_top_wingsuit))
+    margin_size = int(side_size_image / ((len(keypoints) ** (1/2)) - 1))
+
+    adjusted_image = adjust_perspective(
+        bgr_image, pts_origin_wingsuits, side_size_image, margin_size)
 
     adjusted_keypoints = get_wingsuits_keypoints(adjusted_image)
     max_diameter = max([k.size for k in adjusted_keypoints])
     radius = int(max_diameter / 2)
 
     image_painted = paint_wingsuits_keypoints(
-        adjusted_image, adjusted_keypoints, radius)
+        adjusted_image, adjusted_keypoints, radius, square_size)
 
+    adjusted_image = cv2.cvtColor(adjusted_image, cv2.COLOR_BGR2RGB)
     final_image = cv2.cvtColor(image_painted, cv2.COLOR_BGR2RGB)
 
-    # plt.subplot(121), plt.imshow(rgb_image), plt.title('Input')
-    plt.subplot(111), plt.imshow(final_image), plt.title('Output')
+    # cv2.namedWindow('First Detection',cv2.WINDOW_NORMAL)
+    # cv2.imshow("First Detection", first_detection_image)
+
+    plt.figure(1)
+    plt.imshow(first_detection_image)
+    plt.title('First Detection')
+
+    plt.figure(2)
+    plt.imshow(adjusted_image)
+    plt.title('Adjusted')
+
+    plt.figure(3)
+    plt.imshow(final_image)
+    plt.title('Result')
 
     plt.show()
+
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
 
 
 if __name__ == '__main__':
