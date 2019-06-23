@@ -1,6 +1,11 @@
 # wingsuit-jump-validator
 Check if the wingsuit jump is in a valid diamond format
 
+
+![](results/002.png)
+
+![](results/004.png)
+
 ## Requirements:
   * Python 3.6+
   * I strongly recommend that you use a package manager like Homebrew (MacOS), apt-get (Ubuntu) and Chocolatey (Windows)
