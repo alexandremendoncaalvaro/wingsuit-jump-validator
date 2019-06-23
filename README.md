@@ -1,6 +1,7 @@
-# wingsuit-jump-validator
-Check if the wingsuit jump is in a valid diamond format
-
+# Wingsuit Jump Validator
+Check if the wingsuit jump is in a valid diamond format.
+It´s for study/ fun purposes only.
+Have a lot of improvements to make.
 
 ![](results/002.png)
 
