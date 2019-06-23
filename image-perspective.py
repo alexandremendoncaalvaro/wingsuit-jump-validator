@@ -109,33 +109,67 @@ def check_intersection(rectangle, wingsuit, tolerance):
 def paint_wingsuits_keypoints(image, keypoints, radius):
     color_red = (0, 0, 255)
     color_green = (0, 255, 0)
+    color_yellow = (0, 255, 255)
     font = cv2.FONT_HERSHEY_DUPLEX
     font_size = 0.5
+    tolerance_border = .9
+
+    height, width, channels = image.shape
+
+    estimated_positions, perpendicular_distance = get_estimated_positions(
+        keypoints, height, width)
 
     image_painted = cv2.drawKeypoints(image, keypoints, np.array(
         []), color_red, cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
 
-    rectange_conference = [0, 0, 800, 160]
-    X0, Y0, X1, Y1 = rectange_conference
-    cv2.rectangle(image_painted, (X0, Y0), (X1, Y1), color_red, 2)
+    square_radius = int((perpendicular_distance / 2)*tolerance_border)
 
-    for keypoint in keypoints:
+    for estimated_position, keypoint in zip(estimated_positions, keypoints):
+        X, Y = estimated_position
+        X = int(X)
+        Y = int(Y)
+        rectange_conference = [X - square_radius, Y -
+                              square_radius, X + square_radius, Y + square_radius]
+        X0, Y0, X1, Y1 = rectange_conference
+        cv2.rectangle(image_painted, (X0, Y0), (X1, Y1), color_yellow, 1)
+
         x, y, diameter = int(keypoint.pt[0]), int(
             keypoint.pt[1]), keypoint.size
 
         wingsuit_rectangle = [x - radius, y - radius, x + radius, y + radius]
         x0, y0, x1, y1 = wingsuit_rectangle
-        cv2.rectangle(image_painted, (x0, y0), (x1, y1), color_red, 1)
-        text = f'x0: {x0}, y0: {y0}, x1: {x1}, y1: {y1}'
 
         intersected = check_intersection(
             rectange_conference, wingsuit_rectangle, 1)
 
         if intersected:
             cv2.rectangle(image_painted, (x0, y0), (x1, y1), color_green, 2)
+        else:
+            cv2.rectangle(image_painted, (x0, y0), (x1, y1), color_red, 2)
+            
 
-        cv2.putText(image_painted, text, (x + radius, y - radius),
-                    font, font_size, color_red, 1)
+
+    # rectange_conference = [0, 0, 800, 160]
+    # X0, Y0, X1, Y1 = rectange_conference
+    # cv2.rectangle(image_painted, (X0, Y0), (X1, Y1), color_red, 2)
+
+    # for keypoint in keypoints:
+    #     x, y, diameter = int(keypoint.pt[0]), int(
+    #         keypoint.pt[1]), keypoint.size
+
+    #     wingsuit_rectangle = [x - radius, y - radius, x + radius, y + radius]
+    #     x0, y0, x1, y1 = wingsuit_rectangle
+    #     cv2.rectangle(image_painted, (x0, y0), (x1, y1), color_red, 1)
+    #     text = f'x0: {x0}, y0: {y0}, x1: {x1}, y1: {y1}'
+
+    #     intersected = check_intersection(
+    #         rectange_conference, wingsuit_rectangle, 1)
+
+    #     if intersected:
+    #         cv2.rectangle(image_painted, (x0, y0), (x1, y1), color_green, 2)
+
+    #     cv2.putText(image_painted, text, (x + radius, y - radius),
+    #                 font, font_size, color_red, 1)
 
     return image_painted
 
@@ -143,6 +177,48 @@ def paint_wingsuits_keypoints(image, keypoints, radius):
 def get_points_closest_from(reference, points, K):
     points.sort(key=lambda K: distance.euclidean(reference, K))
     return points[:K]
+
+
+def get_estimated_positions(keypoints, height, width):
+
+    wingsuits_pos = [k.pt for k in keypoints]
+    total_wingsuits = len(wingsuits_pos)
+    square_side_wingsuits = total_wingsuits ** (1/2)
+
+    tl_wingsuit = get_points_closest_from([0, 0], wingsuits_pos, 1)
+    tr_wingsuit = get_points_closest_from([width, 0], wingsuits_pos, 1)
+    bl_wingsuit = get_points_closest_from([0, height], wingsuits_pos, 1)
+    br_wingsuit = get_points_closest_from([height, width], wingsuits_pos, 1)
+
+    top_size = distance.euclidean(tl_wingsuit, tr_wingsuit)
+    bottom_size = distance.euclidean(bl_wingsuit, br_wingsuit)
+    left_size = distance.euclidean(tl_wingsuit, bl_wingsuit)
+    right_size = distance.euclidean(tr_wingsuit, br_wingsuit)
+
+    sides_avg_size = np.average([top_size, bottom_size, left_size, right_size])
+    perpendicular_distance = sides_avg_size / (square_side_wingsuits - 1)
+
+    estimated_positions = []
+
+    row = 0
+    column = 0
+    for item in range(total_wingsuits):
+        isColumnFirstRow = int(item % square_side_wingsuits) == 0
+        if isColumnFirstRow:
+            row = 0
+
+        print(f'{row}, {column}')
+        x, y = tl_wingsuit[0]
+        new_x = x + perpendicular_distance * row
+        new_y = y + perpendicular_distance * column
+        estimated_positions.append([new_x, new_y])
+
+        isColumnLastRow = row == square_side_wingsuits - 1
+        if isColumnLastRow:
+            column += 1
+        row += 1
+
+    return estimated_positions, perpendicular_distance
 
 
 def main():
@@ -160,13 +236,6 @@ def main():
     adjusted_keypoints = get_wingsuits_keypoints(adjusted_image)
     max_diameter = max([k.size for k in adjusted_keypoints])
     radius = int(max_diameter / 2)
-
-    wingsuits_pos = [k.pt for k in adjusted_keypoints]
-    total_wingsuits = len(wingsuits_pos)
-    tl_wingsuit = get_points_closest_from([0, 0], wingsuits_pos, 1)
-    tr_wingsuit = get_points_closest_from([width, 0], wingsuits_pos, 1)
-    bl_wingsuit = get_points_closest_from([0, height], wingsuits_pos, 1)
-    br_wingsuit = get_points_closest_from([height, width], wingsuits_pos, 1)
 
     image_painted = paint_wingsuits_keypoints(
         adjusted_image, adjusted_keypoints, radius)
