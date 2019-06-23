@@ -1,3 +1,4 @@
+import sys
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
@@ -195,7 +196,7 @@ def get_estimated_positions(keypoints, height, width):
         if isColumnFirstRow:
             row = 0
 
-        print(f'{row}, {column}')
+        # print(f'{row}, {column}')
         x, y = tl_wingsuit[0]
         new_x = x + perpendicular_distance * row
         new_y = y + perpendicular_distance * column
@@ -210,7 +211,9 @@ def get_estimated_positions(keypoints, height, width):
 
 
 def main():
-    bgr_image, height, width, channels = get_image('examples/005.jpg')
+    image_path = sys.argv[1]
+    
+    bgr_image, height, width, channels = get_image(image_path)
     rgb_image = cv2.cvtColor(bgr_image, cv2.COLOR_BGR2RGB)
 
     keypoints = get_wingsuits_keypoints(bgr_image)
