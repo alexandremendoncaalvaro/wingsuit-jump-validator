@@ -233,7 +233,7 @@ def main():
         square_size = .95
     elif len(sys.argv) == 3:
         image_path = sys.argv[1]
-        square_size = sys.argv[2]
+        square_size = float(sys.argv[2])
     else:
         image_path = 'examples/001.jpg'
         square_size = .95
